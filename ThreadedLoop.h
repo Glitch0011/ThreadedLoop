@@ -6,32 +6,34 @@
 #include <mutex>
 #include <thread>
 #include <functional>
+#include <vector>
 
 #define THREAD_COUNT 8
 
-typedef std::function<void(int, int, int)> ThreadedLoopFunction;
+#ifdef WIN32
+	#include <Windows.h>
+#endif
 
 class ThreadedLoop
 {
+	typedef std::function<void(int, int, int)> ThreadedLoopFunction;
+
 	ThreadedLoopFunction func;
 
 	std::condition_variable calcWaits;
 
 	volatile std::atomic<int> finished = 0;
-	volatile std::atomic<int> waiting = 0;
-
 	volatile bool die = false;
 
 	std::mutex mutexie[THREAD_COUNT];
 	volatile bool running[THREAD_COUNT];
 
-	std::mutex mainThreadMutex;
 	std::vector<std::thread> threads;
 	std::condition_variable mainConditionalVariable;
 
 public:
 
-	//Required copy constructor
+	//Disable copying to control the thread-creation
 	ThreadedLoop(ThreadedLoop& a) = delete;
 
 	ThreadedLoop(ThreadedLoopFunction func, int totalBoids)
@@ -61,12 +63,10 @@ public:
 						return;
 					}
 					
-					
 					auto perThread = (totalBoids / THREAD_COUNT);
-					auto offset = perThread * i;
 
 					//If we're the final thread, add the remainder to the loop to finish all the boids
-					func(i, perThread + (i != (THREAD_COUNT - 1) ? 0 : (totalBoids % THREAD_COUNT)), offset);
+					func(i, perThread + (i != (THREAD_COUNT - 1) ? 0 : (totalBoids % THREAD_COUNT)), perThread * i);
 
 					finished++;
 					this->running[i] = false;
@@ -85,6 +85,7 @@ public:
 			t.join();
 	}
 
+private:
 	void Run()
 	{
 		memset((void*)this->running, (int)true, sizeof(this->running));
@@ -97,14 +98,10 @@ public:
 		while (finished != THREAD_COUNT)
 			std::this_thread::yield();
 
-		/*while (!mainConditionalVariable.wait_for(std::unique_lock<std::mutex>(mainThreadMutex), std::chrono::microseconds(10), [&]() { return finished == THREAD_COUNT; }))
-		{
-			std::this_thread::yield();
-		}*/
-
 		finished = 0;
 	}
 
+public:
 	void RunAndWait()
 	{
 		this->Run();
