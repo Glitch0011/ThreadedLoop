@@ -44,7 +44,7 @@ public:
 
 		if (!this->data)
 		{
-			assert(false);
+		
 		}
 
 		memset((void*)this->running, 0,  sizeof(bool) * THREAD_COUNT);
